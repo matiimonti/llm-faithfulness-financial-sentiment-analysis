@@ -12,6 +12,7 @@ Usage:
 import argparse
 import json
 import sys
+import traceback
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -55,6 +56,7 @@ def run(model_keys: list[str], sample_size: int | None) -> None:
                 except Exception as e:
                     errors += 1
                     print(f"  Error on obs {obs.id}: {e}")
+                    traceback.print_exc()
 
             total = len(observations) - errors
             acc = correct / total if total > 0 else 0
