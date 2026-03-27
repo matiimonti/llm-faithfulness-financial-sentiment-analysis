@@ -2,7 +2,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline 
+from transformers import AutoTokenizer, AutoModelForCausalLM
+
+from config import GENERATION
 # Autotokenizer imports the right tokenizer for each model automatically
 # AutoModelForCausalLM loads the right causal language model 
 
@@ -46,17 +48,27 @@ class BaseModel(ABC):
         self,
         system: str,
         user: str,
-        max_new_tokens: int = 512,
-        temperature: float = 0.1,
+        max_new_tokens: int | None = None,
+        temperature: float | None = None,
+        do_sample: bool | None = None,
         json_output: bool = False,
     ) -> GenerationResult:
         """Generate a response.
 
         Args:
-            json_output: Set True when the model is asked to output JSON.
-                         Confidence will be extracted from the sentiment label
-                         token inside the output rather than the first token.
+            max_new_tokens: Overrides GENERATION["max_new_tokens"] if provided.
+            temperature:    Overrides GENERATION["temperature"] if provided.
+                            Ignored when do_sample=False.
+            do_sample:      Overrides GENERATION["do_sample"] if provided.
+                            Set False for deterministic (greedy) decoding.
+            json_output:    Set True when the model is asked to output JSON.
+                            Confidence will be extracted from the sentiment label
+                            token inside the output rather than the first token.
         """
+        max_new_tokens = max_new_tokens if max_new_tokens is not None else GENERATION["max_new_tokens"]
+        do_sample = do_sample if do_sample is not None else GENERATION["do_sample"]
+        temperature = temperature if temperature is not None else GENERATION["temperature"]
+
         messages = self._build_messages(system, user)
         tokenized = self.tokenizer.apply_chat_template(
             messages,
@@ -71,17 +83,20 @@ class BaseModel(ABC):
 
         attention_mask = torch.ones_like(input_ids)
 
+        gen_kwargs = dict(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            pad_token_id=self.tokenizer.pad_token_id,
+            max_new_tokens=max_new_tokens,
+            do_sample=do_sample,
+            return_dict_in_generate=True,
+            output_scores=True,
+        )
+        if do_sample:
+            gen_kwargs["temperature"] = temperature
+
         with torch.no_grad():
-            output = self.model.generate(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                pad_token_id=self.tokenizer.pad_token_id,
-                max_new_tokens=max_new_tokens,
-                temperature=temperature,
-                do_sample=True,
-                return_dict_in_generate=True,
-                output_scores=True,
-            )
+            output = self.model.generate(**gen_kwargs)
 
         # Decode only the newly generated tokens
         new_token_ids = output.sequences[0][input_ids.shape[-1]:]

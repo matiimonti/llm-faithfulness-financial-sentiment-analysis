@@ -89,7 +89,7 @@ class PromptStabilityTask(BaseTask):
                 question=question,
                 text=observation.text,
             )
-            result = self.model.generate(system=self._SYSTEM, user=prompt, json_output=True)
+            result = self.model.generate(system=self._SYSTEM, user=prompt, json_output=True, do_sample=False)
 
             parsed = parse_json(result.text)
             sentiment = self._extract_sentiment(parsed.get("sentiment", "") if parsed else "")

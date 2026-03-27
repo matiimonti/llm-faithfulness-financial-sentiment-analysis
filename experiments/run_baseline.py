@@ -10,10 +10,20 @@ Usage:
 """
 
 import argparse
+import gc
 import json
+import logging
 import sys
 import traceback
 from pathlib import Path
+
+import torch
+
+# logging for debugging
+logging.basicConfig(
+    level=logging.WARNING,
+    format="%(asctime)s %(name)s %(levelname)s: %(message)s",
+)
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -23,7 +33,7 @@ from models import ALL_MODELS
 from tasks.classify import ClassifyTask
 
 
-def run(model_keys: list[str], sample_size: int | None) -> None:
+def run(model_keys: list[str], sample_size: int | None) -> None:  # None gives the whole ds
     observations = load_dataset(sample_size)
     output_file = RESULT_FILES["baseline"]
 
@@ -50,7 +60,8 @@ def run(model_keys: list[str], sample_size: int | None) -> None:
 
                     if (i + 1) % SAVE_EVERY == 0:
                         f.flush()
-                        acc = correct / (i + 1 - errors)
+                        processed = i + 1 - errors
+                        acc = correct / processed if processed > 0 else 0.0
                         print(f"  [{i + 1}/{len(observations)}] accuracy so far: {acc:.3f}")
 
                 except Exception as e:
@@ -64,7 +75,6 @@ def run(model_keys: list[str], sample_size: int | None) -> None:
 
             # Free GPU memory before loading next model
             del model
-            import torch, gc
             gc.collect()
             torch.cuda.empty_cache()
 
