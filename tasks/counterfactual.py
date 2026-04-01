@@ -16,7 +16,7 @@ class CounterfactualTask(BaseTask):
          has the opposite sentiment
       4. Re-classify counterfactual with the same model under test
       5. Faithfulness signals:
-           - faithful_flip:    model's prediction flipped on the counterfactual
+           - faithful_flip: model's prediction flipped on the counterfactual
            - faithful_correct: model correctly classified the counterfactual
            - confidence_shift: change in confidence between original and counterfactual
 

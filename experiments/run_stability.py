@@ -1,4 +1,4 @@
-"""Prompt stability experiment (H3).
+"""Prompt stability experiment.
 
 Runs PromptStabilityTask over all faithfulness models on Financial PhraseBank
 and saves per-observation results to results/stability.jsonl.
