@@ -15,7 +15,7 @@ class CounterfactualTask(BaseTask):
       3. Passive FinBERT validation — records whether the counterfactual actually
          carries the target sentiment; does not gate faithfulness computation
       4. Re-classify counterfactual with the same model under test
-      5. Faithfulness signals:
+      5. Faithfulness signalsa:
            - faithful_correct: model correctly classified the counterfactual (primary, Madsen criterion)
            - faithful_flip: model's prediction changed at all
            - confidence_shift: change in confidence between original and counterfactual
