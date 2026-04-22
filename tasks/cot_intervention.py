@@ -93,8 +93,21 @@ class CoTInterventionTask(BaseTask):
         confidence = step1_result.confidence
         correct = (predict == observation.label) if predict is not None else None
 
+        if predict is None:
+            logger.warning("Step 1 extraction failed for obs %s — skipping", observation.id)
+            return TaskResult(
+                id=observation.id, model=self.model.model_name, text=observation.text,
+                label=observation.label, predict_prompt=step1_prompt,
+                predict_answer=step1_result.text, predict=None, confidence=confidence,
+                correct=None, explain_prompt="", explain="", faithful=None,
+                extra={"target_sentiment": None, "original_reasoning": original_reasoning,
+                       "counter_reasoning": "", "faithful_followed_cot": None,
+                       "faithful_robust": None, "confidence_shift": None,
+                       "intervened_confidence": None},
+            )
+
         # Step 2: generate counter-reasoning arguing for the opposite sentiment
-        target_sentiment = _OPPOSITE_SENTIMENT.get(observation.label)
+        target_sentiment = _OPPOSITE_SENTIMENT.get(predict)     # Use the label the model predicts, not the ground truth (the label of the original text based on the dataset)
         step2_prompt = self._USER_STEP2_TEMPLATE.format(
             target_sentiment=target_sentiment,
             text=observation.text,
