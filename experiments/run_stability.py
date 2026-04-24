@@ -35,24 +35,32 @@ from models import ALL_MODELS
 from tasks.prompt_stability import PromptStabilityTask
 
 
-def run(model_keys: list[str], sample_size: int | None) -> None:
+def _output_file(model_key: str, output_dir: str | None) -> Path:
+    base = Path(output_dir) if output_dir else RESULT_FILES["stability"].parent
+    base.mkdir(parents=True, exist_ok=True)
+    return base / f"stability_{model_key}.jsonl"
+
+
+def run(model_keys: list[str], sample_size: int | None, output_dir: str | None = None) -> None:
     observations = load_dataset(sample_size)
-    output_file = RESULT_FILES["stability"]
 
-    with open(output_file, "w") as f:
-        for model_key in model_keys:
-            if model_key not in ALL_MODELS:
-                print(f"Unknown model '{model_key}', skipping.")
-                continue
+    for model_key in model_keys:
+        if model_key not in ALL_MODELS:
+            print(f"Unknown model '{model_key}', skipping.")
+            continue
 
-            print(f"\n── Running prompt stability: {model_key} ──")
-            model = ALL_MODELS[model_key]()
-            task = PromptStabilityTask(model)
+        output_file = _output_file(model_key, output_dir)
+        print(f"\n── Running prompt stability: {model_key} ──")
+        print(f"   Output: {output_file}")
 
-            all_agree_count = 0
-            scored = 0
-            errors = 0
+        model = ALL_MODELS[model_key]()
+        task = PromptStabilityTask(model)
 
+        all_agree_count = 0
+        scored = 0
+        errors = 0
+
+        with open(output_file, "w") as f:
             for i, obs in enumerate(observations):
                 try:
                     result = task.run(obs)
@@ -73,15 +81,15 @@ def run(model_keys: list[str], sample_size: int | None) -> None:
                     print(f"  Error on obs {obs.id}: {e}")
                     traceback.print_exc()
 
-            agree_rate = all_agree_count / scored if scored > 0 else 0.0
-            print(f"  Final ({model_key}): all_agree rate: {agree_rate:.3f}  ({errors} errors)")
+        agree_rate = all_agree_count / scored if scored > 0 else 0.0
+        print(f"  Final ({model_key}): all_agree rate: {agree_rate:.3f}  ({errors} errors)")
+        print(f"Saved → {output_file}")
 
-            del model
-            gc.collect()
-            torch.cuda.empty_cache()
+        del model
+        gc.collect()
+        torch.cuda.empty_cache()
 
-    print(f"\nResults saved to {output_file}")
-    print("Note: run metrics/similarity.py to compute BERTScore over reasoning texts.")
+    print("\nNote: run metrics/similarity.py to compute BERTScore over reasoning texts.")
 
 
 def parse_args() -> argparse.Namespace:
@@ -98,9 +106,15 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Number of observations to sample (default: full dataset)",
     )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=None,
+        help="Override output directory (default: config.RESULTS_DIR)",
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
-    run(model_keys=args.models, sample_size=args.sample)
+    run(model_keys=args.models, sample_size=args.sample, output_dir=args.output_dir)
