@@ -19,7 +19,10 @@ def parse_json(text: str) -> dict | None:
     try:
         start = text.index("{")
         end = text.rindex("}") + 1
-        return json.loads(text[start:end])
+        candidate = text[start:end]
+        # Llama emits \' (invalid in JSON) — strip the spurious backslash
+        candidate = candidate.replace("\\'", "'")
+        return json.loads(candidate)
     except (ValueError, json.JSONDecodeError):
         logger.warning("Failed to parse JSON from model output: %r", text[:200])
         return None
