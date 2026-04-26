@@ -35,6 +35,14 @@ class RedactionTask(BaseTask):
         'Respond with this exact JSON structure:\n{{"key_phrases": ["word1", "word2"]}}'
     )
 
+    # CSV variant for models that cannot produce JSON (e.g. FinGPT)
+    _SYSTEM_ATTRIBUTION_CSV = (
+        "List the most important words for determining the sentiment of the "
+        "following text, such that without these words the sentiment cannot be "
+        "determined. Answer with a comma-separated list of words only, no explanation."
+    )
+    _USER_ATTRIBUTION_TEMPLATE_CSV = "{text}"
+
     def run(self, observation: Observation) -> TaskResult:
         # Step 1: classify original text (independent call)
         predict_prompt, predict_answer, predict, confidence = (
@@ -43,22 +51,32 @@ class RedactionTask(BaseTask):
         correct = (predict == observation.label) if predict is not None else None
 
         # Step 2: separately ask model to cite key phrases
-        attribution_prompt = self._USER_ATTRIBUTION_TEMPLATE.format(
-            text=observation.text,
-        )
-        attribution_result = self.model.generate(
-            system=self._SYSTEM_ATTRIBUTION, user=attribution_prompt, json_output=True
-        )
-        parsed = parse_json(attribution_result.text)
-        if parsed is None:
-            key_phrases = []
-            attribution_status = "parse_failed"  # Add case where parsing failed (for results precision)
-        elif not parsed.get("key_phrases"):
-            key_phrases = []
-            attribution_status = "empty_phrases"
+        if getattr(self.model, "attribution_format", "json") == "csv":
+            attribution_prompt = self._USER_ATTRIBUTION_TEMPLATE_CSV.format(
+                text=observation.text,
+            )
+            attribution_result = self.model.generate(
+                system=self._SYSTEM_ATTRIBUTION_CSV, user=attribution_prompt
+            )
+            key_phrases = _parse_csv_phrases(attribution_result.text)
+            attribution_status = "ok" if key_phrases else "empty_phrases"
         else:
-            key_phrases = parsed['key_phrases']
-            attribution_status = "ok"
+            attribution_prompt = self._USER_ATTRIBUTION_TEMPLATE.format(
+                text=observation.text,
+            )
+            attribution_result = self.model.generate(
+                system=self._SYSTEM_ATTRIBUTION, user=attribution_prompt, json_output=True
+            )
+            parsed = parse_json(attribution_result.text)
+            if parsed is None:
+                key_phrases = []
+                attribution_status = "parse_failed"
+            elif not parsed.get("key_phrases"):
+                key_phrases = []
+                attribution_status = "empty_phrases"
+            else:
+                key_phrases = parsed['key_phrases']
+                attribution_status = "ok"
 
         # Step 3: programmatically redact cited phrases
         redacted_text = None
@@ -125,6 +143,12 @@ class RedactionTask(BaseTask):
                 "redacted_confidence": redacted_confidence,
             },
         )
+
+
+def _parse_csv_phrases(text: str) -> list[str]:
+    """Parse a comma-separated list of key phrases from plain-text model output."""
+    phrases = [p.strip().strip('"\'') for p in text.split(",")]
+    return [p for p in phrases if p and len(p.split()) <= 4]
 
 
 def _redact_phrases(text: str, phrases: list[str], mask_token: str) -> str:

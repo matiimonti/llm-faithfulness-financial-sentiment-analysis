@@ -26,6 +26,7 @@ class BaseModel(ABC):
     """
 
     model_name: str  # set in subclass
+    attribution_format: str = "json"  # override to "csv" for models that can't produce JSON
 
     def __init__(self, device: str = "cuda"):
         self.device = device
